@@ -11,6 +11,7 @@ class MixedOp(nn.Module):
   def __init__(self, C, stride):
     super(MixedOp, self).__init__()
     self._ops = nn.ModuleList()
+    # 7 种原始操作
     for primitive in PRIMITIVES:
       op = OPS[primitive](C, stride, False)
       if 'pool' in primitive:
@@ -25,7 +26,7 @@ class Cell(nn.Module):
   def __init__(self, steps, multiplier, C_prev_prev, C_prev, C, reduction, reduction_prev):
     super(Cell, self).__init__()
     self.reduction = reduction
-
+    # make sure pre_pre's frature map and out_channel as same as pre
     if reduction_prev:
       self.preprocess0 = FactorizedReduce(C_prev_prev, C, affine=False)
     else:
@@ -35,14 +36,14 @@ class Cell(nn.Module):
     self._multiplier = multiplier
 
     self._ops = nn.ModuleList()
-
+    '''   4个节点,共计14条边    '''
     for i in range(self._steps):
       for j in range(2+i):
-        stride = 2 if reduction and j < 2 else 1
+        stride = 2 if reduction and j < 2 else 1   # feature map size of reduction_cell is the half of the before
         op = MixedOp(C, stride)
         self._ops.append(op)
 
-  def forward(self, s0, s1, weights):
+  def forward(self, s0, s1, weights):  # The feature maps of all nodes in one cell are the same
     s0 = self.preprocess0(s0)
     s1 = self.preprocess1(s1)
 
@@ -75,10 +76,13 @@ class Network(nn.Module):
       nn.Conv2d(3, C_curr, 3, padding=1, bias=False),
       nn.BatchNorm2d(C_curr)
     )
-
+    # C_curr : one node's out_channel of this cell,
+    # C_prev : out_channel of pre cell
     C_prev_prev, C_prev, C_curr = C_curr, C_curr, C
     self.cells = nn.ModuleList()
     reduction_prev = False
+    # cell out_channel : 16*3 , 16*3 ,L0: 16*4 ,L1: 16*4 ,L2: 32*4 ,L3: 32*4 ,L4: 32*4 ,L5: 64*4 ,L6: 64*4 ,L7: 64*4
+    # feature map of cell : (32,32) ,(32,32) ,L0: (32,32) ,L1: (32,32) ,L2: (16,16) ,L3: (16,16) ,L4: (16,16) ,L5: (8,8) ,L6: (8,8) ,L7: (8,8)
     for i in range(layers):
       if i in [layers//3, 2*layers//3]:
         C_curr *= 2
@@ -88,7 +92,7 @@ class Network(nn.Module):
       cell = Cell(steps, multiplier, C_prev_prev, C_prev, C_curr, reduction, reduction_prev)
       reduction_prev = reduction
       self.cells += [cell]
-
+      # cat([sa,sb,sc,sd],dim=1)
       C_prev_prev, C_prev = C_prev, multiplier*C_curr
 
     self.global_pooling = nn.AdaptiveAvgPool2d(1)
@@ -105,9 +109,9 @@ class Network(nn.Module):
     s0 = s1 = self.stem(input)
     for i, cell in enumerate(self.cells):
       if cell.reduction:
-        weights = F.sigmoid(self.alphas_reduce)
+        weights = torch.sigmod(self.alphas_reduce)
       else:
-        weights = F.sigmoid(self.alphas_normal)
+        weights = torch.sigmod(self.alphas_normal)
       s0, s1 = s1, cell(s0, s1, weights)
     out = self.global_pooling(s1)
     logits = self.classifier(out.view(out.size(0),-1))
@@ -148,8 +152,8 @@ class Network(nn.Module):
   def genotype(self):
 
     # alphas_normal
-    gene_normal = parse(F.sigmoid(self.alphas_normal).data.cpu().numpy(), PRIMITIVES, self.op_threshold, self.parse_method, self._steps)
-    gene_reduce = parse(F.sigmoid(self.alphas_reduce).data.cpu().numpy(), PRIMITIVES, self.op_threshold, self.parse_method, self._steps)
+    gene_normal = parse(torch.sigmod(self.alphas_normal).data.cpu().numpy(), PRIMITIVES, self.op_threshold, self.parse_method, self._steps)
+    gene_reduce = parse(torch.sigmod(self.alphas_reduce).data.cpu().numpy(), PRIMITIVES, self.op_threshold, self.parse_method, self._steps)
 
     concat = range(2+self._steps-self._multiplier, self._steps+2)
     genotype = Genotype(
@@ -179,8 +183,8 @@ class Network(nn.Module):
     mm = 0
     last_id = 1
     node_id = 0
-    weights1 = F.sigmoid(self.alphas_normal).data.cpu().numpy()
-    weights2 = F.sigmoid(self.alphas_reduce).data.cpu().numpy()
+    weights1 = torch.sigmod(self.alphas_normal).data.cpu().numpy()
+    weights2 = torch.sigmod(self.alphas_reduce).data.cpu().numpy()
 
     k, num_ops = weights1.shape
     for i in range(k):

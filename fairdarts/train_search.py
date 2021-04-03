@@ -20,7 +20,7 @@ from separate_loss import ConvSeparateLoss, TriSeparateLoss
 parser = argparse.ArgumentParser("cifar")
 parser.add_argument('--data', type=str, default='/home/work/dataset/cifar/', help='location of the data corpus')
 parser.add_argument('--dataset', type=str, default='cifar10', help='cifar10 or cifar 100 for searching')
-parser.add_argument('--batch_size', type=int, default=128, help='batch size')
+parser.add_argument('--batch_size', type=int, default=16, help='batch size')
 parser.add_argument('--learning_rate', type=float, default=0.005, help='init learning rate')
 parser.add_argument('--learning_rate_min', type=float, default=0.001, help='min learning rate')
 parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
@@ -142,8 +142,8 @@ def main():
     genotype = model.genotype()
     logging.info('genotype = %s', genotype)
 
-    logging.info(F.sigmoid(model.alphas_normal))
-    logging.info(F.sigmoid(model.alphas_reduce))
+    logging.info(torch.sigmoid(model.alphas_normal))
+    logging.info(torch.sigmoid(model.alphas_reduce))
     model.update_history()
 
     # training and search the model
@@ -170,8 +170,8 @@ def main():
     utils.save_file(recoder=model.alphas_reduce_history, path=os.path.join(args.save, 'reduce'))
 
   # save last operations
-  np.save(os.path.join(os.path.join(args.save, 'normal_weight.npy')), F.sigmoid(model.alphas_normal).data.cpu().numpy())
-  np.save(os.path.join(os.path.join(args.save, 'reduce_weight.npy')), F.sigmoid(model.alphas_reduce).data.cpu().numpy())
+  np.save(os.path.join(os.path.join(args.save, 'normal_weight.npy')), torch.sigmoid(model.alphas_normal).data.cpu().numpy())
+  np.save(os.path.join(os.path.join(args.save, 'reduce_weight.npy')), torch.sigmoid(model.alphas_reduce).data.cpu().numpy())
   logging.info('save last weights done')
 
 
@@ -206,7 +206,7 @@ def train(train_queue, valid_queue, model, architect, criterion, model_optimizer
       arch_optimizer.zero_grad()
 
     logits = model(input)
-    aux_input = torch.cat([F.sigmoid(model.alphas_normal), F.sigmoid(model.alphas_reduce)], dim=0)
+    aux_input = torch.cat([torch.sigmoid(model.alphas_normal), torch.sigmoid(model.alphas_reduce)], dim=0)
 
     if not args.single_level:
       loss, _, _ = criterion(logits, target, aux_input)

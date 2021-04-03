@@ -147,6 +147,9 @@ SNAS = Genotype(normal=[('sep_conv_3x3', 0), ('sep_conv_3x3', 1),
 """Sparse"""														
 # threshold = 0.85 for edge and weight=10 lr = 0.0025
 # FLOPS: 373M Params: 2.83
+# normal: out_channel and feature map keep same with before
+# reduce: out_channel *2 and feature map /2 based before
+# ('sep_conv_3x3', 2, 0): execute sep_conv_3x3 from s0 to s2
 FairDARTS_a = Genotype(normal=[('sep_conv_3x3', 2, 0), ('sep_conv_5x5', 2, 1), ('max_pool_3x3', 4, 0), ('sep_conv_3x3', 5, 0)], normal_concat=range(2, 6),
          reduce=[('max_pool_3x3', 2, 0), ('avg_pool_3x3', 2, 1), ('avg_pool_3x3', 3, 0), ('dil_conv_5x5', 3, 1), ('avg_pool_3x3', 4, 0), ('sep_conv_5x5', 4, 1),
                  ('skip_connect', 5, 0), ('skip_connect', 5, 1)], reduce_concat=range(2, 6))
